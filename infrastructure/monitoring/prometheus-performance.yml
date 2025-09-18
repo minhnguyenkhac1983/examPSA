@@ -1,0 +1,149 @@
+# Prometheus Configuration for Performance Monitoring
+# Optimized for p99 < 150ms target monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'equilibrium'
+    environment: 'production'
+
+rule_files:
+  - "performance-rules.yml"
+  - "latency-rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node Exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 10s
+    metrics_path: /metrics
+
+  # PostgreSQL Exporter
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 10s
+    metrics_path: /metrics
+
+  # Redis Exporter
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 10s
+    metrics_path: /metrics
+
+  # Kafka Exporter
+  - job_name: 'kafka-exporter'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+    scrape_interval: 10s
+    metrics_path: /metrics
+
+  # Flink Metrics
+  - job_name: 'flink-metrics'
+    static_configs:
+      - targets: ['flink-jobmanager:8081']
+    scrape_interval: 10s
+    metrics_path: /metrics
+
+  # Application Services
+  - job_name: 'pricing-service'
+    static_configs:
+      - targets: ['pricing-service:8001']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  - job_name: 'analytics-service'
+    static_configs:
+      - targets: ['analytics-service:8002']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  - job_name: 'geospatial-service'
+    static_configs:
+      - targets: ['geospatial-service:8003']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  - job_name: 'stream-processor'
+    static_configs:
+      - targets: ['stream-processor:8004']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  - job_name: 'websocket-service'
+    static_configs:
+      - targets: ['websocket-service:8005']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:8006']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  - job_name: 'ml-pricing-service'
+    static_configs:
+      - targets: ['ml-pricing-service:8007']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  - job_name: 'notification-service'
+    static_configs:
+      - targets: ['notification-service:8008']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  - job_name: 'i18n-service'
+    static_configs:
+      - targets: ['i18n-service:8009']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  - job_name: 'failure-handler-service'
+    static_configs:
+      - targets: ['failure-handler-service:8010']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  # Kong API Gateway
+  - job_name: 'kong'
+    static_configs:
+      - targets: ['kong:8001']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  # Nginx (if using nginx)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:9113']
+    scrape_interval: 10s
+    metrics_path: /metrics
+
+  # Grafana
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Jaeger
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['jaeger:14269']
+    scrape_interval: 30s
+    metrics_path: /metrics

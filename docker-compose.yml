@@ -1,0 +1,844 @@
+version: '3.8'
+
+services:
+  # Database Services
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: equilibrium-postgres
+    environment:
+      POSTGRES_DB: equilibrium
+      POSTGRES_USER: equilibrium
+      POSTGRES_PASSWORD: equilibrium123
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+      # Performance optimizations
+      POSTGRES_SHARED_BUFFERS: "2GB"
+      POSTGRES_EFFECTIVE_CACHE_SIZE: "6GB"
+      POSTGRES_WORK_MEM: "64MB"
+      POSTGRES_MAINTENANCE_WORK_MEM: "512MB"
+      POSTGRES_MAX_CONNECTIONS: "200"
+      POSTGRES_CHECKPOINT_COMPLETION_TARGET: "0.9"
+      POSTGRES_WAL_BUFFERS: "16MB"
+      POSTGRES_DEFAULT_STATISTICS_TARGET: "100"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./data/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./data/postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U equilibrium -d equilibrium"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+
+  mongodb:
+    image: mongo:8.0
+    container_name: equilibrium-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: equilibrium
+      MONGO_INITDB_ROOT_PASSWORD: equilibrium123
+      MONGO_INITDB_DATABASE: equilibrium
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./data/mongodb/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: equilibrium-redis
+    command: redis-server --appendonly yes --requirepass equilibrium123 --maxmemory 8gb --maxmemory-policy allkeys-lru --tcp-keepalive 60 --timeout 300 --hz 10 --dynamic-hz yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./data/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+
+  # Message Queue
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    container_name: equilibrium-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_SYNC_LIMIT: 2
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: equilibrium-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      # Performance optimizations
+      KAFKA_COMPRESSION_TYPE: "lz4"
+      KAFKA_BATCH_SIZE: "65536"
+      KAFKA_LINGER_MS: "10"
+      KAFKA_BUFFER_MEMORY: "134217728"
+      KAFKA_NUM_NETWORK_THREADS: "8"
+      KAFKA_NUM_IO_THREADS: "16"
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: "102400"
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: "102400"
+      KAFKA_LOG_RETENTION_HOURS: "72"
+      KAFKA_LOG_SEGMENT_BYTES: "1073741824"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  # Stream Processing
+  flink-jobmanager:
+    image: flink:1.19-scala_2.12
+    container_name: equilibrium-flink-jobmanager
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 8
+        parallelism.default: 16
+        jobmanager.memory.process.size: 4096m
+        taskmanager.memory.process.size: 8192m
+        taskmanager.memory.managed.size: 4096m
+        state.backend: rocksdb
+        state.backend.incremental: true
+        state.checkpoints.dir: file:///opt/flink/checkpoints
+        state.savepoints.dir: file:///opt/flink/savepoints
+        execution.checkpointing.interval: 30s
+        execution.checkpointing.timeout: 10min
+        execution.checkpointing.min-pause: 5s
+        execution.checkpointing.max-concurrent-checkpoints: 1
+    volumes:
+      - flink_data:/opt/flink
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/overview"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+  flink-taskmanager:
+    image: flink:1.19-scala_2.12
+    container_name: equilibrium-flink-taskmanager
+    depends_on:
+      flink-jobmanager:
+        condition: service_healthy
+    command: taskmanager
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: flink-jobmanager
+        taskmanager.numberOfTaskSlots: 8
+        parallelism.default: 16
+        jobmanager.memory.process.size: 4096m
+        taskmanager.memory.process.size: 8192m
+        taskmanager.memory.managed.size: 4096m
+        state.backend: rocksdb
+        state.backend.incremental: true
+        state.checkpoints.dir: file:///opt/flink/checkpoints
+        state.savepoints.dir: file:///opt/flink/savepoints
+        execution.checkpointing.interval: 30s
+        execution.checkpointing.timeout: 10min
+        execution.checkpointing.min-pause: 5s
+        execution.checkpointing.max-concurrent-checkpoints: 1
+    volumes:
+      - flink_data:/opt/flink
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/taskmanagers"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+
+  # Kong API Gateway
+  kong-database:
+    image: postgres:16-alpine
+    container_name: equilibrium-kong-database
+    environment:
+      POSTGRES_DB: kong
+      POSTGRES_USER: kong
+      POSTGRES_PASSWORD: kong123
+    volumes:
+      - kong_database_data:/var/lib/postgresql/data
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kong -d kong"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  kong-migrations:
+    image: kong:3.4-alpine
+    container_name: equilibrium-kong-migrations
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-database
+      KONG_PG_DATABASE: kong
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kong123
+    depends_on:
+      kong-database:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    command: kong migrations bootstrap
+    restart: "no"
+
+  kong:
+    image: kong:3.4-alpine
+    container_name: equilibrium-kong
+    ports:
+      - "8000:8000"   # Kong Admin API
+      - "8001:8001"   # Kong Proxy
+      - "8443:8443"   # Kong Proxy SSL
+      - "8444:8444"   # Kong Admin API SSL
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_HOST: kong-database
+      KONG_PG_DATABASE: kong
+      KONG_PG_USER: kong
+      KONG_PG_PASSWORD: kong123
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8000
+      KONG_PROXY_LISTEN: 0.0.0.0:8001
+      KONG_ADMIN_GUI_URL: http://localhost:8002
+      KONG_ADMIN_GUI_LISTEN: 0.0.0.0:8002
+      KONG_PLUGINS: bundled,rate-limiting,key-auth,jwt,cors,request-transformer,response-transformer,ip-restriction,acl
+    depends_on:
+      kong-migrations:
+        condition: service_completed_successfully
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Konga - Kong Admin GUI
+  konga:
+    image: pantsel/konga:latest
+    container_name: equilibrium-konga
+    ports:
+      - "1337:1337"
+    environment:
+      NODE_ENV: development
+      KONGA_HOOK_TIMEOUT: 120000
+    depends_on:
+      - kong
+    networks:
+      - equilibrium-network
+    restart: unless-stopped
+
+  pricing-service:
+    build:
+      context: ./backend/pricing-service
+      dockerfile: Dockerfile
+    container_name: equilibrium-pricing-service
+    expose:
+      - "8001"
+    environment:
+      - DATABASE_URL=postgresql://equilibrium:equilibrium123@postgres:5432/equilibrium
+      - REDIS_URL=redis://:equilibrium123@redis:6379/0
+      - KAFKA_BROKERS=kafka:9092
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - API_VERSION=2.0.0
+      - SERVICE_HOST=0.0.0.0
+      - SERVICE_PORT=8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  analytics-service:
+    build:
+      context: ./backend/analytics-service
+      dockerfile: Dockerfile
+    container_name: equilibrium-analytics-service
+    expose:
+      - "8002"
+    environment:
+      - DATABASE_URL=postgresql://equilibrium:equilibrium123@postgres:5432/equilibrium
+      - REDIS_URL=redis://:equilibrium123@redis:6379/0
+      - MONGODB_URL=mongodb://equilibrium:equilibrium123@mongodb:27017/equilibrium
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - API_VERSION=2.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  geospatial-service:
+    build:
+      context: ./backend/geospatial-service
+      dockerfile: Dockerfile
+    container_name: equilibrium-geospatial-service
+    expose:
+      - "8003"
+    environment:
+      - DATABASE_URL=postgresql://equilibrium:equilibrium123@postgres:5432/equilibrium
+      - REDIS_URL=redis://:equilibrium123@redis:6379/0
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - API_VERSION=2.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  stream-processor:
+    build:
+      context: ./backend/stream-processor
+      dockerfile: Dockerfile
+    container_name: equilibrium-stream-processor
+    expose:
+      - "8004"
+    environment:
+      - DATABASE_URL=postgresql://equilibrium:equilibrium123@postgres:5432/equilibrium
+      - REDIS_URL=redis://:equilibrium123@redis:6379/0
+      - KAFKA_BROKERS=kafka:9092
+      - FLINK_JOBMANAGER_URL=http://flink-jobmanager:8081
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - API_VERSION=2.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      flink-jobmanager:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # WebSocket Service
+  websocket-service:
+    build:
+      context: ./backend/websocket-service
+      dockerfile: Dockerfile
+    container_name: equilibrium-websocket-service
+    expose:
+      - "8005"
+    environment:
+      - WEBSOCKET_HOST=0.0.0.0
+      - WEBSOCKET_PORT=8005
+      - REDIS_URL=redis://:equilibrium123@redis:6379/0
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - API_VERSION=2.0.0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Authentication Service
+  auth-service:
+    build:
+      context: ./backend/auth-service
+      dockerfile: Dockerfile
+    container_name: equilibrium-auth-service
+    expose:
+      - "8006"
+    environment:
+      - SECRET_KEY=equilibrium-secret-key-2025-change-in-production
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - REFRESH_TOKEN_EXPIRE_DAYS=7
+      - DATABASE_URL=postgresql://equilibrium:equilibrium123@postgres:5432/equilibrium
+      - REDIS_URL=redis://:equilibrium123@redis:6379/0
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - API_VERSION=2.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ML Pricing Service
+  ml-pricing-service:
+    build:
+      context: ./backend/ml-pricing-service
+      dockerfile: Dockerfile
+    container_name: equilibrium-ml-pricing-service
+    expose:
+      - "8007"
+    environment:
+      - ML_MODEL_VERSION=2.0.0
+      - PREDICTION_CONFIDENCE_THRESHOLD=0.7
+      - REDIS_URL=redis://:equilibrium123@redis:6379/0
+      - DATABASE_URL=postgresql://equilibrium:equilibrium123@postgres:5432/equilibrium
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - API_VERSION=2.0.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Notification Service
+  notification-service:
+    build:
+      context: ./backend/notification-service
+      dockerfile: Dockerfile
+    container_name: equilibrium-notification-service
+    expose:
+      - "8008"
+    environment:
+      - NOTIFICATION_QUEUE_SIZE=1000
+      - PUSH_NOTIFICATION_ENABLED=true
+      - REDIS_URL=redis://:equilibrium123@redis:6379/0
+      - KAFKA_BROKERS=kafka:9092
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - API_VERSION=2.0.0
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # i18n Service
+  i18n-service:
+    build:
+      context: ./backend/i18n-service
+      dockerfile: Dockerfile
+    container_name: equilibrium-i18n-service
+    expose:
+      - "8009"
+    environment:
+      - SUPPORTED_LANGUAGES=en,vi,es,fr,de,zh,ja,ko,th
+      - DEFAULT_LANGUAGE=en
+      - REDIS_URL=redis://:equilibrium123@redis:6379/0
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - API_VERSION=2.0.0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8009/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Failure Handler Service
+  failure-handler-service:
+    build:
+      context: ./backend/failure-handler-service
+      dockerfile: Dockerfile
+    container_name: equilibrium-failure-handler-service
+    expose:
+      - "8010"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=equilibrium123
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=equilibrium
+      - POSTGRES_USER=equilibrium
+      - POSTGRES_PASSWORD=equilibrium123
+      - ENVIRONMENT=development
+      - LOG_LEVEL=INFO
+      - API_VERSION=2.0.0
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Frontend Services
+  admin-portal:
+    build:
+      context: ./frontend/admin-portal
+      dockerfile: Dockerfile
+    container_name: equilibrium-admin-portal
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8001
+      - REACT_APP_WEBSOCKET_URL=ws://localhost:8001/ws
+      - REACT_APP_ENVIRONMENT=development
+      - GENERATE_SOURCEMAP=false
+    depends_on:
+      kong:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Mobile App - React Native
+  mobile-app-react:
+    build:
+      context: ./frontend/mobile-app
+      dockerfile: Dockerfile
+    container_name: equilibrium-mobile-app-react
+    ports:
+      - "19000:19000"
+      - "19001:19001"
+      - "19002:19002"
+    environment:
+      - EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0
+      - REACT_APP_API_URL=http://localhost:8001
+      - REACT_APP_WEBSOCKET_URL=ws://localhost:8001/ws
+      - REACT_APP_ENVIRONMENT=development
+    depends_on:
+      kong:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:19000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Mobile App - Flutter
+  mobile-app-flutter:
+    build:
+      context: ./frontend/mobile-app
+      dockerfile: Dockerfile.flutter
+    container_name: equilibrium-mobile-app-flutter
+    ports:
+      - "3004:80"
+    environment:
+      - API_BASE_URL=http://localhost:8001
+      - WEBSOCKET_URL=ws://localhost:8001/ws
+      - ENVIRONMENT=development
+    depends_on:
+      kong:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Driver App - React Native
+  driver-app-react:
+    build:
+      context: ./frontend/driver-app
+      dockerfile: Dockerfile
+    container_name: equilibrium-driver-app-react
+    ports:
+      - "19003:19000"
+      - "19004:19001"
+      - "19005:19002"
+    environment:
+      - EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0
+      - REACT_APP_API_URL=http://localhost:8001
+      - REACT_APP_WEBSOCKET_URL=ws://localhost:8001/ws
+      - REACT_APP_ENVIRONMENT=development
+    depends_on:
+      kong:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:19000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Driver App - Flutter
+  driver-app-flutter:
+    build:
+      context: ./frontend/driver-app
+      dockerfile: Dockerfile.flutter
+    container_name: equilibrium-driver-app-flutter
+    ports:
+      - "3005:80"
+    environment:
+      - API_BASE_URL=http://localhost:8001
+      - WEBSOCKET_URL=ws://localhost:8001/ws
+      - ENVIRONMENT=development
+    depends_on:
+      kong:
+        condition: service_healthy
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Monitoring Services
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: equilibrium-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: equilibrium-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infrastructure/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./infrastructure/monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.55
+    container_name: equilibrium-jaeger
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    networks:
+      - equilibrium-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:16686/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  mongodb_data:
+    driver: local
+  redis_data:
+    driver: local
+  kafka_data:
+    driver: local
+  zookeeper_data:
+    driver: local
+  zookeeper_logs:
+    driver: local
+  flink_data:
+    driver: local
+  grafana_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  kong_database_data:
+    driver: local
+
+networks:
+  equilibrium-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

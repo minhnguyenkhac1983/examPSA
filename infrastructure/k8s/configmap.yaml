@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: equilibrium
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    rule_files:
+      # - "first_rules.yml"
+      # - "second_rules.yml"
+
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      - job_name: 'api-gateway'
+        static_configs:
+          - targets: ['api-gateway-service:8000']
+        metrics_path: '/metrics'
+        scrape_interval: 5s
+
+      - job_name: 'pricing-service'
+        static_configs:
+          - targets: ['pricing-service:8001']
+        metrics_path: '/metrics'
+        scrape_interval: 5s
+
+      - job_name: 'analytics-service'
+        static_configs:
+          - targets: ['analytics-service:8002']
+        metrics_path: '/metrics'
+        scrape_interval: 5s
+
+      - job_name: 'geospatial-service'
+        static_configs:
+          - targets: ['geospatial-service:8003']
+        metrics_path: '/metrics'
+        scrape_interval: 5s
+
+      - job_name: 'stream-processor'
+        static_configs:
+          - targets: ['stream-processor:8004']
+        metrics_path: '/metrics'
+        scrape_interval: 5s
+
+      - job_name: 'websocket-service'
+        static_configs:
+          - targets: ['websocket-service:8005']
+        metrics_path: '/metrics'
+        scrape_interval: 5s
+
+      - job_name: 'auth-service'
+        static_configs:
+          - targets: ['auth-service:8006']
+        metrics_path: '/metrics'
+        scrape_interval: 5s
+
+      - job_name: 'ml-pricing-service'
+        static_configs:
+          - targets: ['ml-pricing-service:8007']
+        metrics_path: '/metrics'
+        scrape_interval: 5s
+
+      - job_name: 'notification-service'
+        static_configs:
+          - targets: ['notification-service:8008']
+        metrics_path: '/metrics'
+        scrape_interval: 5s
+
+      - job_name: 'advanced-analytics-service'
+        static_configs:
+          - targets: ['advanced-analytics-service:8009']
+        metrics_path: '/metrics'
+        scrape_interval: 5s
+
+      - job_name: 'i18n-service'
+        static_configs:
+          - targets: ['i18n-service:8010']
+        metrics_path: '/metrics'
+        scrape_interval: 5s

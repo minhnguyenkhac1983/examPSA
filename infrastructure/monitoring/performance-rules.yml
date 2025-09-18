@@ -1,0 +1,232 @@
+# Performance Alerting Rules for p99 < 150ms Target
+# Prometheus Alerting Rules
+
+groups:
+  - name: latency_alerts
+    rules:
+      # High P99 Latency Alert
+      - alert: HighP99Latency
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 0.15
+        for: 2m
+        labels:
+          severity: critical
+          service: "{{ $labels.service }}"
+        annotations:
+          summary: "High P99 latency detected"
+          description: "P99 latency for {{ $labels.service }} is {{ $value }}s, exceeding 150ms target"
+
+      # High P95 Latency Alert
+      - alert: HighP95Latency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          service: "{{ $labels.service }}"
+        annotations:
+          summary: "High P95 latency detected"
+          description: "P95 latency for {{ $labels.service }} is {{ $value }}s, exceeding 100ms target"
+
+      # High P50 Latency Alert
+      - alert: HighP50Latency
+        expr: histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m])) > 0.03
+        for: 5m
+        labels:
+          severity: info
+          service: "{{ $labels.service }}"
+        annotations:
+          summary: "High P50 latency detected"
+          description: "P50 latency for {{ $labels.service }} is {{ $value }}s, exceeding 30ms target"
+
+  - name: database_performance
+    rules:
+      # PostgreSQL High Query Time
+      - alert: PostgreSQLHighQueryTime
+        expr: pg_stat_database_tup_returned / pg_stat_database_tup_fetched > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL high query time"
+          description: "PostgreSQL query performance degraded"
+
+      # PostgreSQL Connection Pool Exhaustion
+      - alert: PostgreSQLConnectionPoolExhaustion
+        expr: pg_stat_activity_count / pg_settings_max_connections > 0.8
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL connection pool near exhaustion"
+          description: "PostgreSQL connections at {{ $value }}% of maximum"
+
+      # Redis High Memory Usage
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage at {{ $value }}% of maximum"
+
+      # Redis High Latency
+      - alert: RedisHighLatency
+        expr: redis_commands_duration_seconds > 0.01
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis high latency"
+          description: "Redis command latency is {{ $value }}s"
+
+  - name: cache_performance
+    rules:
+      # Low Cache Hit Ratio
+      - alert: LowCacheHitRatio
+        expr: cache_hit_ratio < 0.9
+        for: 5m
+        labels:
+          severity: warning
+          cache_level: "{{ $labels.cache_level }}"
+        annotations:
+          summary: "Low cache hit ratio"
+          description: "Cache hit ratio for {{ $labels.cache_level }} is {{ $value }}"
+
+      # Cache Miss Rate High
+      - alert: HighCacheMissRate
+        expr: rate(cache_misses_total[5m]) > 100
+        for: 2m
+        labels:
+          severity: warning
+          cache_level: "{{ $labels.cache_level }}"
+        annotations:
+          summary: "High cache miss rate"
+          description: "Cache miss rate for {{ $labels.cache_level }} is {{ $value }} misses/sec"
+
+  - name: stream_processing
+    rules:
+      # Kafka High Lag
+      - alert: KafkaHighLag
+        expr: kafka_consumer_lag_sum > 1000
+        for: 2m
+        labels:
+          severity: warning
+          topic: "{{ $labels.topic }}"
+        annotations:
+          summary: "Kafka consumer lag high"
+          description: "Kafka consumer lag for {{ $labels.topic }} is {{ $value }}"
+
+      # Flink Job Failure
+      - alert: FlinkJobFailure
+        expr: flink_jobmanager_numFailedJobs > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Flink job failure"
+          description: "Flink job has failed"
+
+      # Flink High Checkpoint Duration
+      - alert: FlinkHighCheckpointDuration
+        expr: flink_jobmanager_lastCheckpointDuration > 60000
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Flink checkpoint duration high"
+          description: "Flink checkpoint duration is {{ $value }}ms"
+
+  - name: service_health
+    rules:
+      # Service Down
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: "{{ $labels.job }}"
+        annotations:
+          summary: "Service is down"
+          description: "Service {{ $labels.job }} is down"
+
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: "{{ $labels.service }}"
+        annotations:
+          summary: "High error rate"
+          description: "Error rate for {{ $labels.service }} is {{ $value }}"
+
+      # High Response Time
+      - alert: HighResponseTime
+        expr: rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds_count[5m]) > 0.2
+        for: 3m
+        labels:
+          severity: warning
+          service: "{{ $labels.service }}"
+        annotations:
+          summary: "High average response time"
+          description: "Average response time for {{ $labels.service }} is {{ $value }}s"
+
+  - name: resource_utilization
+    rules:
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          instance: "{{ $labels.instance }}"
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage on {{ $labels.instance }} is {{ $value }}%"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 3m
+        labels:
+          severity: critical
+          instance: "{{ $labels.instance }}"
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage on {{ $labels.instance }} is {{ $value }}%"
+
+      # Disk Space Low
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 90
+        for: 2m
+        labels:
+          severity: critical
+          instance: "{{ $labels.instance }}"
+          mountpoint: "{{ $labels.mountpoint }}"
+        annotations:
+          summary: "Disk space low"
+          description: "Disk space on {{ $labels.mountpoint }} is {{ $value }}% full"
+
+  - name: throughput_alerts
+    rules:
+      # Low Throughput
+      - alert: LowThroughput
+        expr: rate(http_requests_total[5m]) < 100
+        for: 5m
+        labels:
+          severity: warning
+          service: "{{ $labels.service }}"
+        annotations:
+          summary: "Low throughput"
+          description: "Throughput for {{ $labels.service }} is {{ $value }} requests/sec"
+
+      # High Throughput (potential overload)
+      - alert: HighThroughput
+        expr: rate(http_requests_total[5m]) > 5000
+        for: 2m
+        labels:
+          severity: info
+          service: "{{ $labels.service }}"
+        annotations:
+          summary: "High throughput"
+          description: "Throughput for {{ $labels.service }} is {{ $value }} requests/sec"

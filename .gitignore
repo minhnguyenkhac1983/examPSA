@@ -1,0 +1,8 @@
+/frontend/admin-portal/node_modules
+/infrastructure/terraform/proxmox
+/scripts/demo
+/infrastructure/terraform
+/infrastructure/helm
+/scripts
+/tests
+/infrastructure/scripts

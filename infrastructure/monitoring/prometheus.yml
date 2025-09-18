@@ -1,0 +1,49 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "rules/*.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Equilibrium Services
+  - job_name: 'equilibrium-pricing-service'
+    static_configs:
+      - targets: ['pricing-service:8001']
+    metrics_path: '/health'
+    scrape_interval: 10s
+
+  - job_name: 'equilibrium-analytics-service'
+    static_configs:
+      - targets: ['analytics-service:8002']
+    metrics_path: '/health'
+    scrape_interval: 10s
+
+  - job_name: 'equilibrium-geospatial-service'
+    static_configs:
+      - targets: ['geospatial-service:8003']
+    metrics_path: '/health'
+    scrape_interval: 10s
+
+  - job_name: 'equilibrium-stream-processor'
+    static_configs:
+      - targets: ['stream-processor:8004']
+    metrics_path: '/health'
+    scrape_interval: 10s
+
+  - job_name: 'equilibrium-api-gateway'
+    static_configs:
+      - targets: ['api-gateway:8000']
+    metrics_path: '/health'
+    scrape_interval: 10s

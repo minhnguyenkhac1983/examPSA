@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-pricing-service
+  namespace: equilibrium
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ml-pricing-service
+  template:
+    metadata:
+      labels:
+        app: ml-pricing-service
+    spec:
+      containers:
+      - name: ml-pricing-service
+        image: equilibrium/ml-pricing-service:latest
+        ports:
+        - containerPort: 8007
+        env:
+        - name: ML_PRICING_SERVICE_PORT
+          value: "8007"
+        - name: REDIS_HOST
+          value: "redis-service"
+        - name: POSTGRES_HOST
+          value: "postgres-service"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8007
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8007
+          initialDelaySeconds: 30
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-pricing-service
+  namespace: equilibrium
+spec:
+  selector:
+    app: ml-pricing-service
+  ports:
+  - protocol: TCP
+    port: 8007
+    targetPort: 8007
+  type: ClusterIP
