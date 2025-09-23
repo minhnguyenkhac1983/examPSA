@@ -409,6 +409,430 @@ class PricingStreamProcessor:
 
 ---
 
+#### **⚙️ The Pricing Engine Logic**
+
+##### Core Pricing Calculation Logic
+
+```python
+class PricingEngine:
+    def __init__(self):
+        self.config_service = ConfigurationService()
+        self.geospatial_service = GeospatialService()
+        self.analytics_service = AnalyticsService()
+        self.pricing_algorithms = {
+            'linear': LinearPricingAlgorithm(),
+            'exponential': ExponentialPricingAlgorithm(),
+            'ml_based': MLPricingAlgorithm(),
+            'adaptive': AdaptivePricingAlgorithm()
+        }
+    
+    async def calculate_final_surge_multiplier(self, zone_id: str, context: dict) -> dict:
+        """Calculate final surge multiplier for a zone with geospatial smoothing"""
+        
+        # 1. Get current supply/demand data
+        supply_demand = await self._get_supply_demand_data(zone_id)
+        
+        # 2. Get zone configuration
+        zone_config = await self.config_service.get_zone_config(zone_id)
+        
+        # 3. Apply geospatial smoothing to avoid sharp price cliffs
+        smoothed_data = await self._apply_geospatial_smoothing(zone_id, supply_demand)
+        
+        # 4. Select appropriate pricing algorithm
+        algorithm = self._select_pricing_algorithm(zone_config, context)
+        
+        # 5. Calculate base multiplier
+        base_multiplier = await algorithm.calculate_multiplier(smoothed_data, zone_config)
+        
+        # 6. Apply business rules and constraints
+        final_multiplier = await self._apply_business_rules(base_multiplier, zone_config, context)
+        
+        # 7. Log pricing decision for analytics
+        await self._log_pricing_decision(zone_id, final_multiplier, context)
+        
+        return {
+            'zone_id': zone_id,
+            'surge_multiplier': final_multiplier,
+            'algorithm_used': algorithm.name,
+            'confidence_score': algorithm.confidence_score,
+            'timestamp': datetime.utcnow(),
+            'context': context
+        }
+    
+    async def _apply_geospatial_smoothing(self, zone_id: str, supply_demand: dict) -> dict:
+        """Apply geospatial smoothing to avoid sharp price cliffs between adjacent zones"""
+        
+        # Get neighboring zones within smoothing radius
+        neighboring_zones = await self.geospatial_service.get_neighboring_zones(
+            zone_id, 
+            radius_km=2.0
+        )
+        
+        # Calculate weighted average considering distance
+        smoothed_supply = supply_demand['supply']
+        smoothed_demand = supply_demand['demand']
+        total_weight = 1.0
+        
+        for neighbor_zone in neighboring_zones:
+            neighbor_data = await self._get_supply_demand_data(neighbor_zone['zone_id'])
+            distance_km = neighbor_zone['distance_km']
+            
+            # Weight decreases with distance (exponential decay)
+            weight = math.exp(-distance_km / 1.0)  # 1km decay constant
+            
+            smoothed_supply += neighbor_data['supply'] * weight
+            smoothed_demand += neighbor_data['demand'] * weight
+            total_weight += weight
+        
+        # Normalize by total weight
+        smoothed_supply /= total_weight
+        smoothed_demand /= total_weight
+        
+        return {
+            'supply': smoothed_supply,
+            'demand': smoothed_demand,
+            'smoothing_factor': total_weight,
+            'neighboring_zones_count': len(neighboring_zones)
+        }
+    
+    def _select_pricing_algorithm(self, zone_config: dict, context: dict) -> PricingAlgorithm:
+        """Select appropriate pricing algorithm based on zone characteristics and context"""
+        
+        # Algorithm selection logic
+        if zone_config.get('use_ml_pricing', False) and context.get('ml_available', True):
+            return self.pricing_algorithms['ml_based']
+        elif zone_config.get('pricing_type') == 'exponential':
+            return self.pricing_algorithms['exponential']
+        elif zone_config.get('pricing_type') == 'adaptive':
+            return self.pricing_algorithms['adaptive']
+        else:
+            return self.pricing_algorithms['linear']
+    
+    async def _apply_business_rules(self, base_multiplier: float, zone_config: dict, context: dict) -> float:
+        """Apply business rules and constraints to final multiplier"""
+        
+        # 1. Apply minimum and maximum bounds
+        min_multiplier = zone_config.get('min_multiplier', 1.0)
+        max_multiplier = zone_config.get('max_multiplier', 5.0)
+        
+        final_multiplier = max(min_multiplier, min(base_multiplier, max_multiplier))
+        
+        # 2. Apply time-based adjustments
+        current_hour = datetime.utcnow().hour
+        if 7 <= current_hour <= 9 or 17 <= current_hour <= 19:  # Rush hours
+            final_multiplier *= zone_config.get('rush_hour_multiplier', 1.1)
+        
+        # 3. Apply weather adjustments
+        if context.get('weather_condition') == 'severe':
+            final_multiplier *= zone_config.get('weather_multiplier', 1.2)
+        
+        # 4. Apply event-based adjustments
+        if context.get('special_event'):
+            final_multiplier *= zone_config.get('event_multiplier', 1.3)
+        
+        # 5. Apply gradual change limits to prevent price shocks
+        last_multiplier = await self._get_last_multiplier(zone_config['zone_id'])
+        if last_multiplier:
+            max_change = zone_config.get('max_change_per_period', 0.5)
+            change_limit = max_change * last_multiplier
+            
+            if abs(final_multiplier - last_multiplier) > change_limit:
+                if final_multiplier > last_multiplier:
+                    final_multiplier = last_multiplier + change_limit
+                else:
+                    final_multiplier = last_multiplier - change_limit
+        
+        return round(final_multiplier, 2)
+```
+
+##### Different Pricing Algorithms
+
+```python
+class LinearPricingAlgorithm:
+    """Linear pricing algorithm for stable, predictable pricing"""
+    
+    def __init__(self):
+        self.name = "linear"
+        self.confidence_score = 0.9
+    
+    async def calculate_multiplier(self, supply_demand: dict, zone_config: dict) -> float:
+        """Calculate multiplier using linear relationship"""
+        supply = supply_demand['supply']
+        demand = supply_demand['demand']
+        
+        if supply == 0:
+            return zone_config.get('max_multiplier', 5.0)
+        
+        # Linear relationship: multiplier = 1 + (demand/supply - 1) * factor
+        ratio = demand / supply
+        if ratio <= 1.0:
+            return 1.0
+        
+        linear_factor = zone_config.get('linear_factor', 0.5)
+        multiplier = 1.0 + (ratio - 1.0) * linear_factor
+        
+        return multiplier
+
+class ExponentialPricingAlgorithm:
+    """Exponential pricing algorithm for dynamic surge pricing"""
+    
+    def __init__(self):
+        self.name = "exponential"
+        self.confidence_score = 0.85
+    
+    async def calculate_multiplier(self, supply_demand: dict, zone_config: dict) -> float:
+        """Calculate multiplier using exponential relationship"""
+        supply = supply_demand['supply']
+        demand = supply_demand['demand']
+        
+        if supply == 0:
+            return zone_config.get('max_multiplier', 5.0)
+        
+        # Exponential relationship for more aggressive pricing
+        ratio = demand / supply
+        if ratio <= 1.0:
+            return 1.0
+        
+        exponential_factor = zone_config.get('exponential_factor', 0.3)
+        multiplier = 1.0 + math.exp((ratio - 1.0) * exponential_factor) - 1.0
+        
+        return multiplier
+
+class MLPricingAlgorithm:
+    """Machine learning-based pricing algorithm"""
+    
+    def __init__(self):
+        self.name = "ml_based"
+        self.confidence_score = 0.95
+        self.model = self._load_ml_model()
+    
+    async def calculate_multiplier(self, supply_demand: dict, zone_config: dict) -> float:
+        """Calculate multiplier using ML model predictions"""
+        
+        # Prepare features for ML model
+        features = {
+            'supply': supply_demand['supply'],
+            'demand': supply_demand['demand'],
+            'supply_demand_ratio': supply_demand['demand'] / max(supply_demand['supply'], 1),
+            'hour_of_day': datetime.utcnow().hour,
+            'day_of_week': datetime.utcnow().weekday(),
+            'zone_type': zone_config.get('zone_type', 'standard'),
+            'historical_avg_multiplier': await self._get_historical_avg(zone_config['zone_id']),
+            'weather_score': await self._get_weather_score(),
+            'event_score': await self._get_event_score(zone_config['zone_id'])
+        }
+        
+        # Predict optimal multiplier
+        predicted_multiplier = self.model.predict(features)
+        
+        return max(1.0, predicted_multiplier)
+
+class AdaptivePricingAlgorithm:
+    """Adaptive pricing algorithm that learns from market response"""
+    
+    def __init__(self):
+        self.name = "adaptive"
+        self.confidence_score = 0.8
+        self.learning_rate = 0.1
+    
+    async def calculate_multiplier(self, supply_demand: dict, zone_config: dict) -> float:
+        """Calculate multiplier using adaptive learning"""
+        
+        # Get recent performance metrics
+        performance_metrics = await self._get_recent_performance(zone_config['zone_id'])
+        
+        # Adjust algorithm parameters based on performance
+        if performance_metrics['completion_rate'] < 0.8:  # Low completion rate
+            # Reduce pricing aggressiveness
+            adjustment_factor = 0.9
+        elif performance_metrics['completion_rate'] > 0.95:  # High completion rate
+            # Increase pricing aggressiveness
+            adjustment_factor = 1.1
+        else:
+            adjustment_factor = 1.0
+        
+        # Calculate base multiplier using exponential algorithm
+        base_algorithm = ExponentialPricingAlgorithm()
+        base_multiplier = await base_algorithm.calculate_multiplier(supply_demand, zone_config)
+        
+        # Apply adaptive adjustment
+        adaptive_multiplier = base_multiplier * adjustment_factor
+        
+        return adaptive_multiplier
+```
+
+##### Configuration Service Integration
+
+```python
+class ConfigurationService:
+    """Service for managing pricing configurations and business rules"""
+    
+    def __init__(self):
+        self.redis_client = Redis()
+        self.database = PostgreSQL()
+        self.cache_ttl = 300  # 5 minutes
+    
+    async def get_zone_config(self, zone_id: str) -> dict:
+        """Get zone-specific pricing configuration"""
+        
+        # Try cache first
+        cached_config = await self.redis_client.get(f"zone_config:{zone_id}")
+        if cached_config:
+            return json.loads(cached_config)
+        
+        # Fetch from database
+        config = await self.database.fetch_one("""
+            SELECT 
+                zone_id,
+                zone_name,
+                min_multiplier,
+                max_multiplier,
+                pricing_type,
+                linear_factor,
+                exponential_factor,
+                use_ml_pricing,
+                rush_hour_multiplier,
+                weather_multiplier,
+                event_multiplier,
+                max_change_per_period,
+                zone_type,
+                is_active
+            FROM zone_pricing_configs 
+            WHERE zone_id = %s AND is_active = true
+        """, (zone_id,))
+        
+        if not config:
+            # Return default configuration
+            config = self._get_default_zone_config(zone_id)
+        
+        # Cache the configuration
+        await self.redis_client.setex(
+            f"zone_config:{zone_id}",
+            self.cache_ttl,
+            json.dumps(config)
+        )
+        
+        return config
+    
+    async def update_zone_config(self, zone_id: str, config_updates: dict) -> bool:
+        """Update zone configuration"""
+        
+        # Update database
+        success = await self.database.execute("""
+            UPDATE zone_pricing_configs 
+            SET 
+                min_multiplier = %s,
+                max_multiplier = %s,
+                pricing_type = %s,
+                linear_factor = %s,
+                exponential_factor = %s,
+                use_ml_pricing = %s,
+                rush_hour_multiplier = %s,
+                weather_multiplier = %s,
+                event_multiplier = %s,
+                max_change_per_period = %s,
+                updated_at = NOW()
+            WHERE zone_id = %s
+        """, (
+            config_updates.get('min_multiplier'),
+            config_updates.get('max_multiplier'),
+            config_updates.get('pricing_type'),
+            config_updates.get('linear_factor'),
+            config_updates.get('exponential_factor'),
+            config_updates.get('use_ml_pricing'),
+            config_updates.get('rush_hour_multiplier'),
+            config_updates.get('weather_multiplier'),
+            config_updates.get('event_multiplier'),
+            config_updates.get('max_change_per_period'),
+            zone_id
+        ))
+        
+        if success:
+            # Invalidate cache
+            await self.redis_client.delete(f"zone_config:{zone_id}")
+            
+            # Notify other services of configuration change
+            await self._notify_config_change(zone_id, config_updates)
+        
+        return success
+    
+    async def get_global_pricing_rules(self) -> dict:
+        """Get global pricing rules and constraints"""
+        
+        rules = await self.redis_client.get("global_pricing_rules")
+        if rules:
+            return json.loads(rules)
+        
+        # Fetch from database
+        rules = await self.database.fetch_one("""
+            SELECT 
+                max_global_multiplier,
+                emergency_multiplier,
+                maintenance_mode_multiplier,
+                default_algorithm,
+                price_change_cooldown_seconds,
+                surge_detection_threshold,
+                price_stability_window_minutes
+            FROM global_pricing_rules 
+            WHERE is_active = true
+        """)
+        
+        if not rules:
+            rules = self._get_default_global_rules()
+        
+        # Cache for 1 hour
+        await self.redis_client.setex(
+            "global_pricing_rules",
+            3600,
+            json.dumps(rules)
+        )
+        
+        return rules
+    
+    def _get_default_zone_config(self, zone_id: str) -> dict:
+        """Get default zone configuration"""
+        return {
+            'zone_id': zone_id,
+            'min_multiplier': 1.0,
+            'max_multiplier': 5.0,
+            'pricing_type': 'linear',
+            'linear_factor': 0.5,
+            'exponential_factor': 0.3,
+            'use_ml_pricing': False,
+            'rush_hour_multiplier': 1.1,
+            'weather_multiplier': 1.2,
+            'event_multiplier': 1.3,
+            'max_change_per_period': 0.5,
+            'zone_type': 'standard',
+            'is_active': True
+        }
+    
+    def _get_default_global_rules(self) -> dict:
+        """Get default global pricing rules"""
+        return {
+            'max_global_multiplier': 10.0,
+            'emergency_multiplier': 1.0,
+            'maintenance_mode_multiplier': 1.0,
+            'default_algorithm': 'linear',
+            'price_change_cooldown_seconds': 60,
+            'surge_detection_threshold': 1.2,
+            'price_stability_window_minutes': 5
+        }
+```
+
+##### Key Features of the Pricing Engine:
+
+1. **🎯 Multi-Algorithm Support**: Linear, exponential, ML-based, and adaptive algorithms
+2. **🌍 Geospatial Smoothing**: Prevents sharp price cliffs between adjacent zones
+3. **⚙️ Configuration-Driven**: Dynamic configuration management through Configuration Service
+4. **📊 Business Rules Engine**: Comprehensive rule application for different scenarios
+5. **🔄 Adaptive Learning**: ML algorithms that learn from market response
+6. **⚡ Real-time Processing**: Sub-150ms pricing calculations
+7. **🛡️ Price Stability**: Gradual change limits to prevent price shocks
+8. **📈 Performance Monitoring**: Continuous monitoring and optimization
+
+---
+
 ### **Failure Handling & Graceful Degradation**
 
 ### Comprehensive Failure Management Strategy
