@@ -833,6 +833,643 @@ class ConfigurationService:
 
 ---
 
+#### 🚀 NATs & JetStream Solution (Kafka Alternative)
+
+NATs and JetStream provide a high-performance and simpler streaming solution compared to Kafka, capable of processing millions of messages per second with low latency.
+
+##### NATs & JetStream Architecture
+
+```python
+# NATs JetStream Configuration
+import asyncio
+import nats
+from nats.js import JetStreamContext
+from nats.js.api import StreamConfig, RetentionPolicy, StorageType
+import json
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from datetime import datetime
+
+@dataclass
+class LocationEvent:
+    event_id: str
+    driver_id: str
+    latitude: float
+    longitude: float
+    s2_cell_id: str
+    zone_id: str
+    is_available: bool
+    vehicle_type: str
+    timestamp: datetime
+
+@dataclass
+class PricingUpdate:
+    zone_id: str
+    surge_multiplier: float
+    supply_count: int
+    demand_count: int
+    algorithm_used: str
+    timestamp: datetime
+
+class NATsStreamManager:
+    """NATs JetStream manager for pricing system"""
+    
+    def __init__(self, nats_url: str = "nats://localhost:4222"):
+        self.nats_url = nats_url
+        self.nc: Optional[nats.NATS] = None
+        self.js: Optional[JetStreamContext] = None
+        self.streams_configured = False
+    
+    async def connect(self):
+        """Connect to NATs server"""
+        self.nc = await nats.connect(self.nats_url)
+        self.js = self.nc.jetstream()
+        await self._setup_streams()
+    
+    async def _setup_streams(self):
+        """Setup required streams"""
+        
+        # 1. Location Events Stream
+        await self.js.add_stream(StreamConfig(
+            name="LOCATION_EVENTS",
+            subjects=["location.*"],
+            retention=RetentionPolicy.WORKQUEUE,
+            storage=StorageType.FILE,
+            max_age=3600,  # 1 hour
+            max_msgs=1000000,
+            max_bytes=1024 * 1024 * 100,  # 100MB
+            replicas=3
+        ))
+        
+        # 2. Pricing Updates Stream
+        await self.js.add_stream(StreamConfig(
+            name="PRICING_UPDATES",
+            subjects=["pricing.*"],
+            retention=RetentionPolicy.LIMITS,
+            storage=StorageType.FILE,
+            max_age=86400,  # 24 hours
+            max_msgs=100000,
+            max_bytes=1024 * 1024 * 50,  # 50MB
+            replicas=3
+        ))
+        
+        # 3. Analytics Events Stream
+        await self.js.add_stream(StreamConfig(
+            name="ANALYTICS_EVENTS",
+            subjects=["analytics.*"],
+            retention=RetentionPolicy.LIMITS,
+            storage=StorageType.FILE,
+            max_age=604800,  # 7 days
+            max_msgs=1000000,
+            max_bytes=1024 * 1024 * 200,  # 200MB
+            replicas=3
+        ))
+        
+        # 4. Configuration Updates Stream
+        await self.js.add_stream(StreamConfig(
+            name="CONFIG_UPDATES",
+            subjects=["config.*"],
+            retention=RetentionPolicy.LIMITS,
+            storage=StorageType.FILE,
+            max_age=2592000,  # 30 days
+            max_msgs=10000,
+            max_bytes=1024 * 1024 * 10,  # 10MB
+            replicas=3
+        ))
+        
+        self.streams_configured = True
+        print("✅ NATs JetStream streams configured successfully")
+    
+    async def publish_location_event(self, event: LocationEvent):
+        """Publish location event"""
+        subject = f"location.{event.zone_id}"
+        data = {
+            "event_id": event.event_id,
+            "driver_id": event.driver_id,
+            "latitude": event.latitude,
+            "longitude": event.longitude,
+            "s2_cell_id": event.s2_cell_id,
+            "zone_id": event.zone_id,
+            "is_available": event.is_available,
+            "vehicle_type": event.vehicle_type,
+            "timestamp": event.timestamp.isoformat()
+        }
+        
+        await self.js.publish(subject, json.dumps(data).encode())
+    
+    async def publish_pricing_update(self, update: PricingUpdate):
+        """Publish pricing update"""
+        subject = f"pricing.{update.zone_id}"
+        data = {
+            "zone_id": update.zone_id,
+            "surge_multiplier": update.surge_multiplier,
+            "supply_count": update.supply_count,
+            "demand_count": update.demand_count,
+            "algorithm_used": update.algorithm_used,
+            "timestamp": update.timestamp.isoformat()
+        }
+        
+        await self.js.publish(subject, json.dumps(data).encode())
+    
+    async def subscribe_location_events(self, zone_id: str, callback):
+        """Subscribe to location events for specific zone"""
+        subject = f"location.{zone_id}"
+        
+        async def message_handler(msg):
+            try:
+                data = json.loads(msg.data.decode())
+                event = LocationEvent(
+                    event_id=data["event_id"],
+                    driver_id=data["driver_id"],
+                    latitude=data["latitude"],
+                    longitude=data["longitude"],
+                    s2_cell_id=data["s2_cell_id"],
+                    zone_id=data["zone_id"],
+                    is_available=data["is_available"],
+                    vehicle_type=data["vehicle_type"],
+                    timestamp=datetime.fromisoformat(data["timestamp"])
+                )
+                await callback(event)
+                await msg.ack()
+            except Exception as e:
+                print(f"❌ Error processing location event: {e}")
+                await msg.nak()
+        
+        # Durable consumer to ensure no message loss
+        await self.js.subscribe(
+            subject,
+            cb=message_handler,
+            durable="location-processor",
+            manual_ack=True
+        )
+    
+    async def subscribe_all_location_events(self, callback):
+        """Subscribe to all location events"""
+        subject = "location.*"
+        
+        async def message_handler(msg):
+            try:
+                data = json.loads(msg.data.decode())
+                event = LocationEvent(
+                    event_id=data["event_id"],
+                    driver_id=data["driver_id"],
+                    latitude=data["latitude"],
+                    longitude=data["longitude"],
+                    s2_cell_id=data["s2_cell_id"],
+                    zone_id=data["zone_id"],
+                    is_available=data["is_available"],
+                    vehicle_type=data["vehicle_type"],
+                    timestamp=datetime.fromisoformat(data["timestamp"])
+                )
+                await callback(event)
+                await msg.ack()
+            except Exception as e:
+                print(f"❌ Error processing location event: {e}")
+                await msg.nak()
+        
+        await self.js.subscribe(
+            subject,
+            cb=message_handler,
+            durable="global-location-processor",
+            manual_ack=True
+        )
+    
+    async def close(self):
+        """Close NATs connection"""
+        if self.nc:
+            await self.nc.close()
+```
+
+##### Stream Processor with NATs JetStream
+
+```python
+class NATsStreamProcessor:
+    """Stream processor using NATs JetStream instead of Apache Flink"""
+    
+    def __init__(self, nats_manager: NATsStreamManager):
+        self.nats_manager = nats_manager
+        self.supply_demand_state: Dict[str, Dict] = {}
+        self.pricing_engine = PricingEngine()
+        self.window_size = 30  # seconds
+        self.processing_tasks: List[asyncio.Task] = []
+    
+    async def start_processing(self):
+        """Start stream processing"""
+        print("🚀 Starting NATs Stream Processor...")
+        
+        # Start processing tasks
+        self.processing_tasks = [
+            asyncio.create_task(self._process_location_events()),
+            asyncio.create_task(self._process_pricing_updates()),
+            asyncio.create_task(self._windowed_aggregation()),
+            asyncio.create_task(self._health_monitor())
+        ]
+        
+        # Wait for all tasks
+        await asyncio.gather(*self.processing_tasks)
+    
+    async def _process_location_events(self):
+        """Process location events from NATs"""
+        print("📍 Starting location events processing...")
+        
+        async def handle_location_event(event: LocationEvent):
+            # Update supply/demand state
+            zone_id = event.zone_id
+            if zone_id not in self.supply_demand_state:
+                self.supply_demand_state[zone_id] = {
+                    'supply': 0,
+                    'demand': 0,
+                    'last_updated': datetime.utcnow()
+                }
+            
+            # Update supply count
+            if event.is_available:
+                self.supply_demand_state[zone_id]['supply'] += 1
+            else:
+                self.supply_demand_state[zone_id]['supply'] -= 1
+            
+            # Update timestamp
+            self.supply_demand_state[zone_id]['last_updated'] = datetime.utcnow()
+            
+            # Trigger pricing calculation
+            await self._trigger_pricing_calculation(zone_id)
+        
+        # Subscribe to all location events
+        await self.nats_manager.subscribe_all_location_events(handle_location_event)
+    
+    async def _trigger_pricing_calculation(self, zone_id: str):
+        """Trigger pricing calculation for zone"""
+        try:
+            # Get supply/demand data
+            supply_demand = self.supply_demand_state.get(zone_id, {'supply': 0, 'demand': 0})
+            
+            # Calculate surge multiplier
+            result = await self.pricing_engine.calculate_final_surge_multiplier(
+                zone_id, 
+                {'supply_demand': supply_demand}
+            )
+            
+            # Create pricing update
+            pricing_update = PricingUpdate(
+                zone_id=zone_id,
+                surge_multiplier=result['surge_multiplier'],
+                supply_count=supply_demand['supply'],
+                demand_count=supply_demand['demand'],
+                algorithm_used=result['algorithm_used'],
+                timestamp=datetime.utcnow()
+            )
+            
+            # Publish pricing update
+            await self.nats_manager.publish_pricing_update(pricing_update)
+            
+            print(f"💰 Pricing update for zone {zone_id}: {result['surge_multiplier']}x")
+            
+        except Exception as e:
+            print(f"❌ Error calculating pricing for zone {zone_id}: {e}")
+    
+    async def _process_pricing_updates(self):
+        """Process pricing updates and update cache"""
+        print("💰 Starting pricing updates processing...")
+        
+        async def handle_pricing_update(msg):
+            try:
+                data = json.loads(msg.data.decode())
+                
+                # Update Redis cache
+                await self._update_pricing_cache(data)
+                
+                # Send to analytics service
+                await self._send_to_analytics(data)
+                
+                await msg.ack()
+                
+            except Exception as e:
+                print(f"❌ Error processing pricing update: {e}")
+                await msg.nak()
+        
+        # Subscribe to pricing updates
+        await self.nats_manager.js.subscribe(
+            "pricing.*",
+            cb=handle_pricing_update,
+            durable="pricing-cache-updater",
+            manual_ack=True
+        )
+    
+    async def _windowed_aggregation(self):
+        """Windowed aggregation for supply/demand data"""
+        print("⏰ Starting windowed aggregation...")
+        
+        while True:
+            try:
+                current_time = datetime.utcnow()
+                
+                # Process zones with data older than window_size
+                for zone_id, state in self.supply_demand_state.items():
+                    time_diff = (current_time - state['last_updated']).total_seconds()
+                    
+                    if time_diff > self.window_size:
+                        # Reset supply/demand for inactive zone
+                        state['supply'] = max(0, state['supply'] - 1)
+                        state['demand'] = max(0, state['demand'] - 1)
+                        state['last_updated'] = current_time
+                        
+                        # Trigger pricing recalculation
+                        await self._trigger_pricing_calculation(zone_id)
+                
+                # Wait 10 seconds before checking again
+                await asyncio.sleep(10)
+                
+            except Exception as e:
+                print(f"❌ Error in windowed aggregation: {e}")
+                await asyncio.sleep(5)
+    
+    async def _update_pricing_cache(self, pricing_data: dict):
+        """Update Redis cache with pricing data"""
+        import redis.asyncio as redis
+        
+        redis_client = redis.Redis(host='localhost', port=6379, db=0)
+        
+        cache_key = f"pricing:{pricing_data['zone_id']}"
+        cache_data = {
+            'surge_multiplier': pricing_data['surge_multiplier'],
+            'supply_count': pricing_data['supply_count'],
+            'demand_count': pricing_data['demand_count'],
+            'algorithm_used': pricing_data['algorithm_used'],
+            'timestamp': pricing_data['timestamp'],
+            'ttl': 300  # 5 minutes
+        }
+        
+        await redis_client.setex(
+            cache_key,
+            300,  # 5 minutes TTL
+            json.dumps(cache_data)
+        )
+        
+        await redis_client.close()
+    
+    async def _send_to_analytics(self, pricing_data: dict):
+        """Send pricing data to analytics service"""
+        analytics_data = {
+            'event_type': 'pricing_update',
+            'zone_id': pricing_data['zone_id'],
+            'surge_multiplier': pricing_data['surge_multiplier'],
+            'supply_count': pricing_data['supply_count'],
+            'demand_count': pricing_data['demand_count'],
+            'algorithm_used': pricing_data['algorithm_used'],
+            'timestamp': pricing_data['timestamp']
+        }
+        
+        await self.nats_manager.js.publish(
+            f"analytics.pricing.{pricing_data['zone_id']}",
+            json.dumps(analytics_data).encode()
+        )
+    
+    async def _health_monitor(self):
+        """Monitor stream processor health"""
+        print("🏥 Starting health monitor...")
+        
+        while True:
+            try:
+                # Check number of zones being processed
+                active_zones = len([
+                    zone_id for zone_id, state in self.supply_demand_state.items()
+                    if (datetime.utcnow() - state['last_updated']).total_seconds() < 60
+                ])
+                
+                print(f"📊 Health Status: {active_zones} zones active")
+                
+                # Check memory usage
+                import psutil
+                memory_percent = psutil.virtual_memory().percent
+                if memory_percent > 80:
+                    print(f"⚠️ Warning: High memory usage ({memory_percent}%)")
+                
+                await asyncio.sleep(30)  # Check every 30 seconds
+                
+            except Exception as e:
+                print(f"❌ Error in health monitor: {e}")
+                await asyncio.sleep(10)
+    
+    async def stop_processing(self):
+        """Stop stream processing"""
+        print("🛑 Stopping NATs Stream Processor...")
+        
+        for task in self.processing_tasks:
+            task.cancel()
+        
+        await asyncio.gather(*self.processing_tasks, return_exceptions=True)
+```
+
+##### NATs Cluster Configuration
+
+```yaml
+# docker-compose-nats.yml
+version: '3.8'
+
+services:
+  nats-1:
+    image: nats:2.10-alpine
+    container_name: nats-1
+    command: [
+      "--jetstream",
+      "--store_dir=/data",
+      "--cluster_name=equilibrium",
+      "--server_name=nats-1",
+      "--cluster=nats://0.0.0.0:6222",
+      "--routes=nats://nats-2:6222,nats://nats-3:6222",
+      "--http_port=8222",
+      "--port=4222"
+    ]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+      - "6222:6222"
+    volumes:
+      - nats-data-1:/data
+    networks:
+      - nats-cluster
+
+  nats-2:
+    image: nats:2.10-alpine
+    container_name: nats-2
+    command: [
+      "--jetstream",
+      "--store_dir=/data",
+      "--cluster_name=equilibrium",
+      "--server_name=nats-2",
+      "--cluster=nats://0.0.0.0:6222",
+      "--routes=nats://nats-1:6222,nats://nats-3:6222",
+      "--http_port=8222",
+      "--port=4222"
+    ]
+    ports:
+      - "4223:4222"
+      - "8223:8222"
+      - "6223:6222"
+    volumes:
+      - nats-data-2:/data
+    networks:
+      - nats-cluster
+
+  nats-3:
+    image: nats:2.10-alpine
+    container_name: nats-3
+    command: [
+      "--jetstream",
+      "--store_dir=/data",
+      "--cluster_name=equilibrium",
+      "--server_name=nats-3",
+      "--cluster=nats://0.0.0.0:6222",
+      "--routes=nats://nats-1:6222,nats://nats-2:6222",
+      "--http_port=8222",
+      "--port=4222"
+    ]
+    ports:
+      - "4224:4222"
+      - "8224:8222"
+      - "6224:6222"
+    volumes:
+      - nats-data-3:/data
+    networks:
+      - nats-cluster
+
+  nats-monitoring:
+    image: synadia/prometheus-nats-exporter:latest
+    container_name: nats-monitoring
+    command: [
+      "-varz",
+      "-connz",
+      "-routez",
+      "-subz",
+      "-jsz=all",
+      "http://nats-1:8222/varz",
+      "http://nats-2:8222/varz",
+      "http://nats-3:8222/varz"
+    ]
+    ports:
+      - "7777:7777"
+    networks:
+      - nats-cluster
+
+volumes:
+  nats-data-1:
+  nats-data-2:
+  nats-data-3:
+
+networks:
+  nats-cluster:
+    driver: bridge
+```
+
+##### Pricing Service with NATs
+
+```python
+class NATsPricingService:
+    """Pricing Service using NATs instead of Kafka"""
+    
+    def __init__(self):
+        self.nats_manager = NATsStreamManager()
+        self.redis_client = redis.Redis(host='localhost', port=6379, db=0)
+        self.pricing_engine = PricingEngine()
+    
+    async def start_service(self):
+        """Start pricing service"""
+        await self.nats_manager.connect()
+        
+        # Subscribe to pricing updates
+        await self._subscribe_pricing_updates()
+        
+        print("✅ NATs Pricing Service started")
+    
+    async def _subscribe_pricing_updates(self):
+        """Subscribe to pricing updates from stream processor"""
+        
+        async def handle_pricing_update(msg):
+            try:
+                data = json.loads(msg.data.decode())
+                
+                # Update cache
+                await self._update_cache(data)
+                
+                # Send real-time update to clients
+                await self._broadcast_pricing_update(data)
+                
+                await msg.ack()
+                
+            except Exception as e:
+                print(f"❌ Error processing pricing update: {e}")
+                await msg.nak()
+        
+        await self.nats_manager.js.subscribe(
+            "pricing.*",
+            cb=handle_pricing_update,
+            durable="pricing-service",
+            manual_ack=True
+        )
+    
+    async def get_pricing_estimate(self, zone_id: str) -> dict:
+        """Get pricing estimate for zone"""
+        
+        # Try cache first
+        cached_data = await self.redis_client.get(f"pricing:{zone_id}")
+        
+        if cached_data:
+            return json.loads(cached_data)
+        
+        # If no cache, calculate real-time
+        supply_demand = await self._get_supply_demand_data(zone_id)
+        result = await self.pricing_engine.calculate_final_surge_multiplier(
+            zone_id,
+            {'supply_demand': supply_demand}
+        )
+        
+        # Cache result
+        await self._cache_pricing_result(zone_id, result)
+        
+        return result
+    
+    async def _broadcast_pricing_update(self, pricing_data: dict):
+        """Broadcast pricing update to all connected clients"""
+        
+        # Send to WebSocket clients
+        websocket_data = {
+            'type': 'pricing_update',
+            'zone_id': pricing_data['zone_id'],
+            'surge_multiplier': pricing_data['surge_multiplier'],
+            'timestamp': pricing_data['timestamp']
+        }
+        
+        await self.nats_manager.js.publish(
+            "websocket.pricing",
+            json.dumps(websocket_data).encode()
+        )
+```
+
+##### Benefits of NATs & JetStream
+
+1. **⚡ High Performance**: Process millions of messages/second with < 1ms latency
+2. **🔧 Simple**: No Zookeeper needed, just NATs server
+3. **💾 JetStream**: Built-in persistence and replay capability
+4. **🌐 Clustering**: Easy horizontal scaling
+5. **📊 Monitoring**: Built-in monitoring and metrics
+6. **🛡️ Reliability**: At-least-once delivery guarantee
+7. **💰 Low Cost**: Fewer resources than Kafka
+8. **🚀 Deployment**: Easy to deploy and maintain
+
+##### Kafka vs NATs Comparison
+
+| Feature | Kafka | NATs + JetStream |
+|---------|-------|------------------|
+| **Setup** | Complex (needs Zookeeper) | ✅ Simple (single binary) |
+| **Memory** | High (JVM overhead) | ✅ Low (Go binary) |
+| **Latency** | 5-10ms | ✅ < 1ms |
+| **Throughput** | 100K-1M msg/s | ✅ 1M-10M msg/s |
+| **Persistence** | Needs configuration | ✅ Built-in JetStream |
+| **Monitoring** | External tools needed | ✅ Built-in metrics |
+| **Resource** | High | ✅ Low |
+
+---
+
 ### **Failure Handling & Graceful Degradation**
 
 ### Comprehensive Failure Management Strategy
