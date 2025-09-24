@@ -1445,7 +1445,7 @@ class NATsPricingService:
         )
 ```
 
-##### Benefits of NATs & JetStream
+##### Benefits of NATs & JetStream v2.11
 
 1. **⚡ High Performance**: Process millions of messages/second with < 1ms latency
 2. **🔧 Simple**: No Zookeeper needed, just NATs server
@@ -1455,11 +1455,14 @@ class NATsPricingService:
 6. **🛡️ Reliability**: At-least-once delivery guarantee
 7. **💰 Low Cost**: Fewer resources than Kafka
 8. **🚀 Deployment**: Easy to deploy and maintain
+9. **🗜️ Compression**: S2 compression for 50% space savings
+10. **🔒 Security**: Built-in encryption support
+11. **📈 Latest Tech**: NATs 2.11 with enhanced features
 
-##### Kafka vs NATs Comparison
+##### Kafka vs NATs v2.11 Comparison
 
-| Feature | Kafka | NATs + JetStream |
-|---------|-------|------------------|
+| Feature | Kafka | NATs + JetStream v2.11 |
+|---------|-------|-------------------------|
 | **Setup** | Complex (needs Zookeeper) | ✅ Simple (single binary) |
 | **Memory** | High (JVM overhead) | ✅ Low (Go binary) |
 | **Latency** | 5-10ms | ✅ < 1ms |
@@ -1467,6 +1470,9 @@ class NATsPricingService:
 | **Persistence** | Needs configuration | ✅ Built-in JetStream |
 | **Monitoring** | External tools needed | ✅ Built-in metrics |
 | **Resource** | High | ✅ Low |
+| **Compression** | Manual setup | ✅ S2 compression built-in |
+| **Encryption** | Complex setup | ✅ Built-in support |
+| **Version** | Multiple versions | ✅ Latest v2.11 |
 
 ---
 

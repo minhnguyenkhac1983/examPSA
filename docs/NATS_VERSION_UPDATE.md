@@ -8,8 +8,8 @@
 |-----------|------------------|-------------|---------|
 | **NATs Server** | 2.10-alpine | **2.11-alpine** | Latest stable release |
 | **NATs Python Client** | 2.6.0 | **2.7.0** | Enhanced features |
-| **NATs Box** | latest | **0.19.0** | Pinned stable version |
-| **Prometheus Exporter** | latest | **0.12.0** | Pinned stable version |
+| **NATs Box** | latest | **latest** | Always latest stable |
+| **Prometheus Exporter** | latest | **latest** | Always latest stable |
 
 ## 🆕 New Features in NATs 2.11
 
