@@ -498,7 +498,7 @@ flowchart LR
     D[SE Knowledge] --> E[Know who to use AI code tools]
     E --> F[Resource Allocation]
     
-    G[Auto Full] --> H{Not auto full?}
+    G[Auto pull] --> H{Not auto pull?}
     H -->|Yes| I[Push]
     H -->|No| J[Continue]
     
