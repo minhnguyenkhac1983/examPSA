@@ -300,7 +300,7 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A[Solution Planning] --> B[Head + SE]
+    A[Solution Planning] --> B[Head + SE/SA]
     B --> C[Create complete solution]
     C --> D[Expanded meeting]
     D --> E[Dev feedback]
