@@ -511,7 +511,7 @@ flowchart LR
 |-----------|-------------|-------------|
 | **SE knows tools** | SE knows how to use AI code tools | Resource optimization |
 | **Stable structure** | Tech team as stable structure, domain delivery team | Organizational stability |
-| **Auto full** | IF not auto full will push | Performance optimization |
+| **Auto pull** | IF not auto pull will push | Performance optimization |
 
 ---
 
