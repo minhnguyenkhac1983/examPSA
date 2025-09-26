@@ -1330,35 +1330,83 @@ graph LR
 | **Confluence** | Documentation, knowledge base | < 48 hours | Comprehensive |
 | **Jira comments** | Task discussions | < 4 hours | Context-specific |
 
-#### 🎮 Fun Activities
+#### 🎉 Fun Activities
 
 ```mermaid
-mindmap
-  root((Fun Activities))
-    Gaming
-      Video game tournaments
-      Board game nights
-      Esports competitions
-    Sports
-      Football matches
-      Badminton tournaments
-      Fitness challenges
-    Creative
-      Art workshops
-      Music sessions
-      Photography contests
-    Social
-      Happy hours
-      Movie nights
-      Cultural events
+flowchart TD
+    A[Fun Activities] --> B[Weekly Activities]
+    A --> C[Monthly Activities]
+    A --> D[Special Events]
+    A --> E[Outdoor Activities]
+    
+    B --> B1[Game night]
+    B --> B2[Lunch together]
+    B --> B3[Team challenges]
+    
+    C --> C1[Birthday celebrations]
+    C --> C2[Team building]
+    C --> C3[Knowledge sharing sessions]
+    
+    D --> D1[Company retreat]
+    D --> D2[Hackathons]
+    D --> D3[Awards ceremonies]
+    
+    E --> E1[Sports activities]
+    E --> E2[Cultural events]
+    E --> E3[Community service]
+    
+    style A fill:#4caf50
+    style B fill:#2196f3
+    style C fill:#ff9800
+    style D fill:#9c27b0
+    style E fill:#f44336
 ```
 
-| Activity | Frequency | Participation | Benefits |
-|----------|-----------|---------------|----------|
-| **Gaming tournaments** | Monthly | 60-80% | Team bonding, stress relief |
-| **Sports activities** | Bi-weekly | 40-60% | Health, team spirit |
-| **Creative workshops** | Monthly | 30-50% | Skill development, creativity |
-| **Social events** | Weekly | 70-90% | Relationship building |
+| Activity Type | Frequency | Duration | Purpose | Budget |
+|---------------|-----------|----------|---------|--------|
+| **Game Night** | Weekly | 1 hour | Team bonding, entertainment | $50/week |
+| **Lunch Together** | Weekly | 1 hour | Communication, connection | $200/week |
+| **Team Building** | Monthly | 4 hours | Team building, skills | $500/month |
+| **Birthday Celebrations** | As needed | 30 minutes | Recognition, fun | $100/event |
+| **Company Retreat** | Annually | 2 days | Strategic planning, bonding | $10,000/year |
+
+##### 🎮 Activity Details
+
+###### 🌟 Game Night
+- **Time**: Friday weekly, 5:00-6:00 PM
+- **Activities**: Board games, video games, trivia
+- **Location**: Office lounge or online
+- **Goal**: Reduce stress, increase team spirit
+
+###### 🍕 Lunch Together
+- **Time**: Tuesday weekly, 12:00-1:00 PM
+- **Activities**: Lunch together, casual conversation
+- **Location**: Nearby restaurant or office
+- **Goal**: Informal communication, connection
+
+###### 🏆 Team Building
+- **Time**: Last Friday of month, 2:00-6:00 PM
+- **Activities**: Escape room, cooking class, outdoor activities
+- **Location**: Off-site locations
+- **Goal**: Build trust, communication, collaboration
+
+###### 🎂 Birthday Celebrations
+- **Time**: On team member's birthday
+- **Activities**: Cake, gifts, team wishes
+- **Location**: Office or online
+- **Goal**: Recognition, create sense of belonging
+
+##### 💡 Benefits of Fun Activities
+
+```mermaid
+pie title Benefits of Fun Activities
+    "Increase Team Spirit" : 25
+    "Reduce Stress" : 20
+    "Improve Communication" : 20
+    "Increase Creativity" : 15
+    "Increase Retention" : 10
+    "Improve Productivity" : 10
+```
 
 
 ---
