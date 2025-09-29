@@ -41,19 +41,24 @@ This document consolidates all knowledge and experience in managing technology t
 
 ```mermaid
 graph TD
-    A[Tech Department - 20+ people] --> B[Head: Department Manager - 1 person]
-    A --> C[SA: Solution Architecture - 1-2 people]
-    A --> D[SE: Senior Developer - 4-5 people]
-    A --> E[DEV: Developer - 4-10 people]
+    A[Tech Department - 20 people] --> B[Head: Department Manager - 1 person]
+    A --> C[SA: Solution Architecture - 1-3 people]
+    A --> D[SE: Senior Developer/DevSecOps - 4-5 people]
+    A --> E[DEV: Developer - 8-10 people]
     A --> F[INTER: Junior/Fresher - 4-5 people]
-    A --> G[QC/QA: Testing/Quality - 1-3 people]
+    A --> G[QC/QA: Testing/Quality - 1-2 people]
     A --> H[Designer: UI/UX - 1-2 people]
     
     B --> I[50% Research Product]
     B --> J[50% Management]
     
-    C --> K[50% Research]
+    C --> K[50% Research + 1-2 Inter Assistant]
     C --> L[50% Live Product]
+    
+    D --> M[Full-stack FE & BE]
+    D --> N[50% DevSecOps]
+    
+    E --> O[Specialized FE or BE]
     
     style A fill:#e1f5fe
     style B fill:#f3e5f5
@@ -85,16 +90,17 @@ graph TD
 | **Planning** | Resource planning and budgeting | 15% |
 | **Evaluation** | Performance evaluation | 15% |
 
-#### 🏗️ Solution Architect (1-2 people)
+#### 🏗️ Solution Architect (1-3 people)
 > **Role**: Solution design and technology research
 
 | Responsibility | Description | Authority |
 |----------------|-------------|-----------|
-| **Research** | 50% research, can pick 1-2 assistants | ✅ |
+| **Research** | 50% research, can pick 1-2 inter assistant | ✅ |
 | **Product** | 50% live product | ✅ |
 | **Solutions** | Create complete solutions for team | ✅ |
 | **Daily Meetings** | Meeting with dev and inter | ✅ |
 | **Promotion Vote** | 3 points - Can vote dev to senior | ✅ |
+| **Recruitment** | SE recruits inter into team | ✅ |
 
 #### 👨‍💻 Senior Developers (4-5 people)
 > **Role**: Technical experts and mentors
@@ -102,52 +108,46 @@ graph TD
 | Responsibility | Description | Requirements |
 |----------------|-------------|--------------|
 | **Expertise** | Lead 1 project in domain | Domain expertise |
-| **Full-stack** | Can work both frontend and backend | Technical breadth |
+| **Full-stack** | Team SE full frontend and backend | Technical breadth |
 | **Mentoring** | Guide junior developers | Leadership skills |
 | **Technical decisions** | Make technical decisions in domain | Decision making |
 | **Code review** | Ensure code quality | Quality focus |
 | **Promotion vote** | 3 points - Can vote dev to senior | Voting power |
+| **DevSecOps (50%)** | Maintenance of current products and update requirements for new features | Security & DevOps expertise |
+| **Recruitment** | SE recruits inter into team | Recruitment skills |
 
 #### 💻 Developers (8-10 people)
 > **Role**: Feature development and product building
 
 | Responsibility | Description | Rules |
 |----------------|-------------|-------|
-| **Specialization** | Specialize in frontend or backend | Specialization |
-| **Cross-domain** | Can be assigned from other domains | Cross-team work |
-| **Timeline** | Assigned by priority, first come first served | First come, first served |
-| **Rotation** | Cannot be assigned consecutively in same domain | Fair rotation |
+| **Specialization** | Team dev specialized in frontend or backend | Specialization |
+| **Cross-domain** | SE pick cross member domain team | Cross-team work |
+| **Timeline** | Pick by priority, first come first served | First come, first served |
+| **Rotation** | Cannot pick consecutively according to total member | Fair rotation |
+| **Meeting** | Can attend general meetings for input and learning | Learning opportunity |
 
 #### 🌱 Junior/Intern (4-5 people)
 > **Role**: Learning and skill development
 
 | Responsibility | Description | Support |
 |----------------|-------------|---------|
-| **Learning** | Can sit and listen in meetings | Learning opportunity |
+| **Learning** | Inter can sit and listen in meetings | Learning opportunity |
 | **Practice** | Work on simple tasks | Hands-on experience |
 | **Mentoring** | Guided by seniors | Guidance |
-| **Recruitment** | Selected by seniors | Selection process |
+| **Recruitment** | Recruited by SE into team | Selection process |
+| **Assistant** | SA can pick 1-2 inter as assistant | Research support |
 
-#### 🔧 DevOps/SRE (4-5 people)
-> **Role**: System operations and maintenance
+#### 🧪 QA/QC (1-2 people)
+> **Role**: Product quality assurance
 
 | Responsibility | Description | Tools |
 |----------------|-------------|-------|
-| **CI/CD** | Pipeline management | Jenkins, GitLab CI |
-| **Infrastructure** | Infrastructure as Code | Terraform, Ansible |
-| **Monitoring** | Monitoring and alerting | Prometheus, Grafana |
-| **Security** | Security compliance | Security tools |
-| **Performance** | Performance optimization | Performance tools |
+| **Testing** | Manual and automated testing | Selenium, Jest |
+| **Quality Assurance** | Ensure code quality | Quality tools |
+| **Bug Tracking** | Track and report bugs | Jira, Bugzilla |
+| **Test Planning** | Plan testing activities | Test management tools |
 
-#### 🧪 Quality Assurance (1-3 people)
-> **Role**: Product quality assurance
-
-| Responsibility | Description | Methods |
-|----------------|-------------|---------|
-| **Test planning** | Plan and execute testing | Test strategy |
-| **Automation** | Automated testing | Automated testing |
-| **Quality metrics** | Quality metrics | Quality metrics |
-| **UAT coordination** | Coordinate user acceptance testing | User acceptance |
 
 ### 1.3 🔄 Cross-Domain Collaboration Model
 
@@ -155,18 +155,18 @@ graph TD
 
 ```mermaid
 graph TD
-    A[Tech Team 20+ people] --> B[Domain A - 6 people]
-    A --> C[Domain B - 6 people]
-    A --> D[Domain C - 5 people]
-    A --> E[Domain D - 5 people]
+    A[Tech Team 20 people] --> B[Domain 1 - 5 people]
+    A --> C[Domain 2 - 5 people]
+    A --> D[Domain 3 - 5 people]
+    A --> E[Domain 4 - 5 people]
     
-    B --> B1[Domain Lead A]
-    C --> C1[Domain Lead B]
-    D --> D1[Domain Lead C]
-    E --> E1[Domain Lead D]
+    B --> B1[SE Lead Domain 1]
+    C --> C1[SE Lead Domain 2]
+    D --> D1[SE Lead Domain 3]
+    E --> E1[SE Lead Domain 4]
     
-    F[Cross-Domain Benefits] --> F1[Knowledge Sharing]
-    F --> F2[Skill Transfer]
+    F[Cross-Domain Benefits] --> F1[SE Pick Cross Member]
+    F --> F2[Knowledge Sharing]
     F --> F3[Backup Coverage]
     F --> F4[Innovation Spread]
     
@@ -414,14 +414,15 @@ flowchart TD
 
 | Level | Requirements | Vote System | Timeline |
 |-------|-------------|-------------|----------|
-| **Dev → SE** | 2 FE + 2 BE projects | SA/SE vote, majority | Every 6 months |
-| **SE → SA** | Complete 4th year as SE | Similar vote | Every 6 months |
-| **Special projects** | Long projects: 1FE + 1BE | Or projects with full domain | Flexible |
+| **Dev → SE** | 2 FE + 2 BE projects (long projects: 1FE + 1BE) | SE vote, majority | Every 6 months |
+| **SE → SA** | SE 1 year = 1 point, SE 2-3 years = 2-3 points | Similar vote | Every 6 months |
+| **Special projects** | Projects with full domain FE + BE | Or long projects | Flexible |
 
 ##### 🎯 Point system:
 - **SE 1 year** = 1 point
 - **SE 2-3 years** = 2-3 points  
 - **3 points** = max
+- **SE knows how to use code tools** = Required skill
 - **Senior over 3 years** = SA will evaluate like SE 1-3 years
 
 #### 🎯 OKRs (Objectives and Key Results)
@@ -482,7 +483,7 @@ graph TD
 
 | Activity | Description | Benefits |
 |----------|-------------|----------|
-| **Private homelab** | Create private homelab for SA, SE, dev, inter research | Freedom to experiment |
+| **Private homelab** | Create private homelab for SE, dev, inter research | Freedom to experiment |
 | **New innovations** | If new innovations, should experiment with 2 technologies in parallel | Compare effectiveness |
 | **Research allocation** | Must have technology improvement through self-research | Continuous improvement |
 | **Head assigns topics** | Or head assigns research topics | Strategic direction |
@@ -1619,6 +1620,36 @@ mindmap
 | **Infrastructure** | Network security | SIEM alerts |
 | **Application** | Secure coding | Runtime protection |
 
+#### 🔧 Product Maintenance & Requirements (50% SE Time)
+
+```mermaid
+flowchart TD
+    A[SE DevSecOps Responsibilities] --> B[Product Maintenance - 25%]
+    A --> C[Requirements Update - 25%]
+    
+    B --> B1[System Monitoring]
+    B --> B2[Performance Optimization]
+    B --> B3[Security Updates]
+    B --> B4[Bug Fixes]
+    B --> B5[Infrastructure Maintenance]
+    
+    C --> C1[Requirement Analysis]
+    C --> C2[Feature Specification]
+    C --> C3[Technical Documentation]
+    C --> C4[Stakeholder Communication]
+    C --> C5[Change Management]
+    
+    style A fill:#4caf50
+    style B fill:#2196f3
+    style C fill:#ff9800
+```
+
+| Activity | Description | Frequency | Tools |
+|----------|-------------|-----------|-------|
+| **Product Maintenance** | Monitoring, optimization, security updates | Daily | Prometheus, Grafana, ELK |
+| **Requirements Update** | Analysis, documentation, communication | Per project | Jira, Confluence, Slack |
+| **Change Management** | Impact assessment, deployment planning | Per sprint | Change management tools |
+
 ### 6.4 🚀 Deployment Process
 
 #### 🎭 Staging Environment
@@ -2629,7 +2660,7 @@ flowchart TD
     
     B --> B1[Head: Department Manager]
     B --> B2[SA: Solution Architect]
-    B --> B3[SE: Senior Developer]
+    B --> B3[SE: Senior Developer/DevSecOps]
     B --> B4[DEV: Developer]
     B --> B5[INTER: Junior/Fresher]
     
@@ -2658,7 +2689,7 @@ flowchart TD
 |-------|------|------------------|-------------|-------------------|
 | **Head** | Department Manager | Strategic planning, budget | → VP/Director | Strategic decisions |
 | **SA** | Solution Architect | Architecture, design | → Principal SA | Architecture decisions |
-| **SE** | Senior Developer | Domain leadership, mentoring | → SA/Manager | Domain decisions |
+| **SE** | Senior Developer/DevSecOps | Domain leadership, mentoring, product maintenance | → SA/Manager | Domain decisions |
 | **DEV** | Developer | Feature implementation | → SE | Feature decisions |
 | **INTER** | Junior/Fresher | Learning, simple tasks | → DEV | Task execution |
 
@@ -2694,15 +2725,17 @@ gantt
 - **Organization**: By small domain (5-6 people)
 - **Rules**: Strictly timeboxed, no detailed problem solving
 
-##### 🤝 1-on-1 Meetings (30-45 minutes)
+##### 🤝 1-on-1 Meetings (30-45 minutes) - MANDATORY
 - **Frequency**: Every 2 weeks, lunch, rotating through all members
 - **Agenda**: Career goals, challenges, feedback, personal balance
 - **Best Practices**: Preparation, follow-up, consistency
+- **Requirement**: Must have 1 on 1 with members
 
 ##### 🏗️ Solution Planning Meeting
-- **Participants**: Head + SE/SA
-- **Process**: Create complete solution first, then expand to team
+- **Participants**: Head + SE (Head will meet with SE for all solutions)
+- **Process**: Head and SE create complete solution then expand meeting for dev input and inter learning
 - **Purpose**: Technical architecture, domain decisions
+- **Daily meetings**: SE will meet with dev and inter
 
 ##### 🎯 Sprint Planning & Retrospective
 - **Planning**: 4 hours for 2-week sprint
@@ -3045,7 +3078,7 @@ flowchart TD
 
 ### 🔄 Unique Content
 
-#### 🌟 Unique Features of Equilibrium Team
+#### 🌟 Unique Features of X Team
 
 ```mermaid
 mindmap
@@ -3093,7 +3126,7 @@ mindmap
 | **🔄 Cross-domain Collaboration** | Dev members between domains cannot work consecutively in same domain, ensuring rotation | Knowledge sharing, skill transfer, backup coverage | SE assigns members according to rotation schedule |
 | **🗳️ Vote System** | SE votes for dev to become senior, ensuring fair promotion based on peer evaluation | Fair promotion, peer recognition, quality assurance | 6-month review cycle with peer voting |
 | **💡 Innovation Time** | 20% time for research, personal projects, and technology exploration | Continuous innovation, employee satisfaction, technical growth | Weekly allocation, project showcase |
-| **🛡️ Backup Planning** | 20/50/30 ratio for team continuity and succession planning | Risk mitigation, business continuity, talent development | Cross-training, documentation, knowledge transfer |
+| **🛡️ Backup Planning** | 20/50/30 ratio for out team - always prepare backup plan | Risk mitigation, business continuity, talent development | Cross-training, documentation, knowledge transfer |
 | **🏠 Homelab** | Private research environment with experimentation freedom | Experimentation freedom, innovation culture, technology evaluation | Company-funded homelab setup |
 | **🔄 Rotation System** | SE cannot pick same domain consecutively, must be different domain | Fair distribution, cross-training, knowledge sharing | Rotation tracking, assignment rules |
 | **🔒 DevSecOps Integration** | Security integration in development pipeline with automated security checks | Security by design, compliance automation, risk reduction | SAST/DAST integration, security gates |
